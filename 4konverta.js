@@ -39,6 +39,7 @@ Envelopes.getPrefValue = function (name) {
 }
 
 Envelopes.setAuthInfo = function(name, password) {
+	// TODO: use password manager to store login/password instead of preferences
 	Envelopes.setPrefValue(Envelopes.Prefs.USERNAME, name);
 	Envelopes.setPrefValue(Envelopes.Prefs.PASSWORD, password);	
 	return;
