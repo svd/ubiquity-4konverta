@@ -26,13 +26,19 @@ Envelopes.setPrefValue = function (name, value) {
     }
 }
 
+Envelopes.deletePrefValue = function (name) {
+    if (Application.prefs.has(name)) {
+        var val = Application.prefs.get(name);
+		val.reset();
+    }
+}
+
 Envelopes.getPrefValue = function (name) {
 	if (name == null) {
 		return null;
 	}
 	if (Application.prefs.has(name)) {
 		var value = Application.prefs.get(name);
-		//displayMessage('pref value: ' + value.value);
 		return value != null ? value.value : null;
 	}
 	return null;
@@ -42,6 +48,12 @@ Envelopes.setAuthInfo = function(name, password) {
 	// TODO: use password manager to store login/password instead of preferences
 	Envelopes.setPrefValue(Envelopes.Prefs.USERNAME, name);
 	Envelopes.setPrefValue(Envelopes.Prefs.PASSWORD, password);	
+	return;
+}
+
+Envelopes.clearAuthInfo = function() {
+	Envelopes.deletePrefValue(Envelopes.Prefs.USERNAME);
+	Envelopes.deletePrefValue(Envelopes.Prefs.PASSWORD);	
 	return;
 }
 
@@ -81,6 +93,8 @@ CmdUtils.CreateCommand({
 		var authInfo = Envelopes.getAuthInfo();
 		if ( Envelopes.isAuthInfoValid(authInfo) ) {
 			msg += _('<hr/>Current login name: <b>${name}</b>');
+		} else {
+			msg += _('<hr/>No login information available');
 		}
 		pblock.innerHTML = CmdUtils.renderTemplate(msg, authInfo);;
 	},
@@ -94,7 +108,32 @@ CmdUtils.CreateCommand({
 			return;
 		}
 		Envelopes.setAuthInfo(args.object.text, args.instrument.text);
-		displayMessage("You selected: " + args.object.text + " -> " + args.instrument.text, this);
+		displayMessage("Saved password for user " + args.object.text, this);
+	}
+});
+
+CmdUtils.CreateCommand({
+	names: ["4k-logout"],
+	icon: "http://www.4konverta.com/favicon.ico",
+	description: "Clears login name and password for www.4konverta.com from internal settings",
+	help: "Execute this command to clear login name and password from internal settings.<br/>Example: <b>4k-logout</b>",
+	author: {name: "Sviatoslav Sviridov", email: "sviridov@gmail.com"},
+	license: "GPL",
+	homepage: "http://github.com/svd/ubiquity-4konverta/",
+
+	preview: function preview(pblock, args) {
+		var msg = this.help;
+		var authInfo = Envelopes.getAuthInfo();
+		if ( Envelopes.isAuthInfoValid(authInfo) ) {
+			msg += _('<hr/>Current login name: <b>${name}</b>');
+		} else {
+			msg += _('<hr/>No login information available');
+		}
+		pblock.innerHTML = CmdUtils.renderTemplate(msg, authInfo);;
+	},
+	execute: function execute(args) {
+		Envelopes.clearAuthInfo();
+		displayMessage('Login information cleared', this);
 	}
 });
 
