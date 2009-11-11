@@ -77,8 +77,12 @@ CmdUtils.CreateCommand({
 	],
 
 	preview: function preview(pblock, args) {
-		
-		pblock.innerHTML = this.help;
+		var msg = this.help;
+		var authInfo = Envelopes.getAuthInfo();
+		if ( Envelopes.isAuthInfoValid(authInfo) ) {
+			msg += _('<hr/>Current login name: <b>${name}</b>');
+		}
+		pblock.innerHTML = CmdUtils.renderTemplate(msg, authInfo);;
 	},
 	execute: function execute(args) {
 		if (args.object.text.length < 1) {
