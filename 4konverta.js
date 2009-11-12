@@ -1,4 +1,6 @@
 
+// 4konverta API is availabele at http://code.google.com/p/4k-api/wiki/ApiDescription
+
 Envelopes = {};
 
 Envelopes.API_APP_ID = "a40194378";
@@ -14,6 +16,10 @@ Envelopes.Prefs = {
 	USERNAME: "ubiquity.4konverta.username",
 	PASSWORD: "ubiquity.4konverta.password"
 };
+
+Envelopes.getBaseURL = function() {
+	return 'https://www.4konverta.com';
+}
 
 Envelopes.setPrefValue = function (name, value) {
     if (!Application.prefs.has(name)) {
@@ -74,6 +80,106 @@ Envelopes.isAuthInfoValid = function (authInfo) {
 	//CmdUtils.log('authInfo is VALID');
 	return true;
 }
+
+Envelopes.API = {
+	USER_INFO:  "/data/${user}",
+	ENVELOPE: "/data/${user}/envelope/${envelopeBegin} ",
+	DAILY_EXPENSE: "/data/${user}/dailyExpense/${personId}/${date}",
+	EXECUTION: "/data/${user}/execution/${envelopeBegin}",
+	INCOME: "/data/${user}/actualIncome/${incomeId}/${plannedDate}",
+	GOAL_CREDIT: "/data/${user}/actualGoalCredit/${goalId}/${plannedDate}",
+	ACTUAL_EXPENSE: "/data/${user}/actualExpense/${expenseId}/${plannedDate}"
+};
+
+Envelopes.setRequestHeaders = function(xhr, authInfo) {
+	xhr.setRequestHeader(Envelopes.Headers.APP_ID, Envelopes.API_APP_ID);
+	xhr.setRequestHeader(Envelopes.Headers.VERSION, Envelopes.API_VERSION);
+	if (authInfo && authInfo.password) {
+		xhr.setRequestHeader(Envelopes.Headers.AUTH, authInfo.password);
+	} else {
+		CmdUtils.log('[setRequestHeaders] authInfo is invalid');
+	}
+}
+
+/**
+ * Default handler for unsuccessful ajax requests.
+ */
+Envelopes.handleAjaxError = function(pblock, req, textStatus, errorThrown) {
+	if (req.status == 401) {
+		pblock.innerHTML = '<h1>Login failed</h1>'
+			+ 'Please check that you set correct login in <b>4k-login</b> command'
+			+ ' and also verify if you can log in at '
+			+ '<a href="https://www.4konverta.com/">https://www.4konverta.com/</a>';
+	} else {
+		pblock.innerHTML = '<h1>Unknown error</h1>';
+	}
+}
+
+/**
+ * Default handler for successful ajax requests. Renders XML document in preview window.
+ */
+Envelopes.renderXml = function(pblock, data, textStatus) {
+	pblock.innerHTML = '<b>Preview not implemented, displaying raw data</b><hr/>'
+		+ data.replace(/</g,'&lt;');
+}
+
+Envelopes.handleUserInfo = function(pblock, data, textStatus) {
+	pblock.innerHTML = '<b>This is cusotom renderer</b><hr/>'
+		+ data.replace(/</g,'&lt;');
+}
+
+Envelopes.sendRequestAsync = function(pblock, resource, onSuccess, onError) {
+	var authInfo = Envelopes.getAuthInfo();
+	if ( !Envelopes.isAuthInfoValid(authInfo) ) {
+		var msg = _('Your username/password information is not set.'
+			+' Please use <b>4k-login</b> command to set your username and password and try again.');
+		pblock.innerHTML = CmdUtils.renderTemplate(msg, {user: authInfo.name, url: url});
+		return;
+	}
+	var url = CmdUtils.renderTemplate(Envelopes.getBaseURL() + resource, 
+		{user: authInfo.name});
+	var msg = _('Loading information for user "<b>${user}</b>"...');
+	pblock.innerHTML = CmdUtils.renderTemplate(msg, {user: authInfo.name});
+	
+	var successHandler = onSuccess || Envelopes.renderXml;
+	var errorHandler = onError || Envelopes.handleAjaxError;
+	
+	jQuery.ajax({
+		type: 'POST',
+		url: url,
+		beforeSend: function(xhr) {
+			Envelopes.setRequestHeaders(xhr, authInfo);
+			return true;
+		},
+		success: function(data, textStatus) {
+			successHandler.call(this, pblock, data, textStatus);
+		},
+		error: function(req, textStatus, errorThrown) {
+			errorHandler.call(this, pblock, req, textStatus, errorThrown);
+		}
+	});
+	
+}
+
+CmdUtils.CreateCommand({
+	names: ["4k-user"],
+	icon: "http://www.4konverta.com/favicon.ico",
+	description: "Get user info from www.4konverta.com",
+	help: "",
+	author: {name: "Sviatoslav Sviridov", email: "sviridov@gmail.com"},
+	license: "GPL",
+	homepage: "http://github.com/svd/ubiquity-4konverta/",
+
+	arguments: [{role: 'object', nountype: noun_arb_text}],
+
+	preview: function preview(pblock, args) {
+		var authInfo = Envelopes.getAuthInfo();
+		Envelopes.sendRequestAsync(pblock, Envelopes.API.USER_INFO, Envelopes.handleUserInfo, null);
+	},
+	execute: function execute(args) {
+		//displayMessage("You selected: " + args.object.text, this);
+	}
+});
 
 CmdUtils.CreateCommand({
 	names: ["4k-login"],
@@ -137,54 +243,3 @@ CmdUtils.CreateCommand({
 	}
 });
 
-CmdUtils.CreateCommand({
-	names: ["4k-user"],
-	icon: "http://www.4konverta.com/favicon.ico",
-	description: "Get user info from www.4konverta.com",
-	help: "",
-	author: {name: "Sviatoslav Sviridov", email: "sviridov@gmail.com"},
-	license: "GPL",
-	homepage: "http://github.com/svd/ubiquity-4konverta/",
-
-	arguments: [{role: 'object', nountype: noun_arb_text}],
-
-	preview: function preview(pblock, args) {
-		var authInfo = Envelopes.getAuthInfo();
-		if ( !Envelopes.isAuthInfoValid(authInfo) ) {
-			var msg = _('Your username/password information is not set.'
-				+' Please use <b>4k-login</b> command to set your username and password and try again.');
-			pblock.innerHTML = CmdUtils.renderTemplate(msg, {user: authInfo.name, url: url});
-			return;
-		}
-		var url = 'https://www.4konverta.com/data/' + authInfo.name
-		var msg = _('Loading information for user "<b>${user}</b>"...');
-		pblock.innerHTML = CmdUtils.renderTemplate(msg, {user: authInfo.name, url: url});
-		
-		jQuery.ajax({
-			type: 'POST',
-			url: url,
-			beforeSend: function(xhr) {
-				xhr.setRequestHeader(Envelopes.Headers.APP_ID, Envelopes.API_APP_ID);
-				xhr.setRequestHeader(Envelopes.Headers.AUTH, authInfo.password);
-				xhr.setRequestHeader(Envelopes.Headers.VERSION, Envelopes.API_VERSION);
-				return true;
-			},
-			success: function(data, textStatus) {
-				pblock.innerHTML = data.replace(/</g,'&lt;');
-			},
-			error: function(req, textStatus, errorThrown) {
-				if (req.status = 401) {
-					pblock.innerHTML = '<h1>Login failed</h1>'
-						+ 'Please check that you set correct login in <b>4k-login</b> command'
-						+ ' and also verify if you can log in at '
-						+ '<a href="https://www.4konverta.com/">https://www.4konverta.com/</a>';
-				} else {
-					pblock.innerHTML = '<h1>Unknown error</h1>';
-				}
-			}
-		});
-	},
-	execute: function execute(args) {
-		//displayMessage("You selected: " + args.object.text, this);
-	}
-});
