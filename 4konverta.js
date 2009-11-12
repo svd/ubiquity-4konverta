@@ -124,11 +124,75 @@ Envelopes.renderXml = function(pblock, data, textStatus) {
 }
 
 Envelopes.handleUserInfo = function(pblock, data, textStatus) {
-	pblock.innerHTML = '<b>This is cusotom renderer</b><hr/>'
-		+ data.replace(/</g,'&lt;');
+	var msg = '<b>This is cusotom renderer</b><br/>'
+		//+ '${user.country.name}'
+		+ '<hr/>${rawData}';
+	var rawData = data.replace(/</g,'&lt;');
+	
+	var userInfo = Envelopes.parseUserInfo(data);
+	CmdUtils.log(userInfo);
+	//CmdUtils.log(userInfo.country);
+	//CmdUtils.log(userInfo.currency);
+	//CmdUtils.log(userInfo.firstDayOfWeek);
+	//CmdUtils.log(userInfo.timeZone);
+	//CmdUtils.log(userInfo.disableExtendedSyntax);
+	//CmdUtils.log(userInfo.persons);
+	//CmdUtils.log(userInfo.accounts);
+
+	pblock.innerHTML = CmdUtils.renderTemplate(msg, {rawData:rawData, user:userInfo});;
+
 }
 
-Envelopes.sendRequestAsync = function(pblock, resource, onSuccess, onError) {
+Envelopes.parseUserInfo = function (data) {
+	var user = {};
+	var $ = jQuery;
+	var $u = $(data);
+
+	$u.find('country').each(function() {
+		user.country = {
+			code: $(this).attr('code'),
+			name: $(this).text()
+		};
+	});
+	$u.find('currency').each(function() {
+		user.currency = {
+			code: $(this).attr('code'),
+			name: $(this).text()
+		};
+	});
+	
+	user.firstDayOfWeek  = $u.find('firstDayOfWeek').text();
+	user.timeZone  = $u.find('timeZone').text();
+	user.disableExtendedSyntax  = $u.find('disableExtendedSyntax').text();
+
+	user.persons = [];
+	$u.find('persons').find('person').each(function(){
+		user.persons.push({
+			id: $(this).attr('id'),
+			name: $(this).attr('name')
+		});
+	});
+	
+	user.accounts = [];
+	$u.find('accounts').find('account').each(function(){
+		var account =
+		{
+			id: $(this).attr('id'),
+			name: $(this).attr('name'),
+			value: $(this).find('value').text()
+		};
+		$(this).find('currency').each(function() {
+			account.currency = {
+				code: $(this).attr('code'),
+				name: $(this).text()
+			};
+		});
+		user.accounts.push(account);
+	});
+	return user;
+}
+
+Envelopes.sendAjaxRequest = function(async, pblock, resource, onSuccess, onError) {
 	var authInfo = Envelopes.getAuthInfo();
 	if ( !Envelopes.isAuthInfoValid(authInfo) ) {
 		var msg = _('Your username/password information is not set.'
@@ -174,7 +238,7 @@ CmdUtils.CreateCommand({
 
 	preview: function preview(pblock, args) {
 		var authInfo = Envelopes.getAuthInfo();
-		Envelopes.sendRequestAsync(pblock, Envelopes.API.USER_INFO, Envelopes.handleUserInfo, null);
+		Envelopes.sendAjaxRequest(true, pblock, Envelopes.API.USER_INFO, Envelopes.handleUserInfo, null);
 	},
 	execute: function execute(args) {
 		//displayMessage("You selected: " + args.object.text, this);
@@ -202,7 +266,7 @@ CmdUtils.CreateCommand({
 		} else {
 			msg += _('<hr/>No login information available');
 		}
-		pblock.innerHTML = CmdUtils.renderTemplate(msg, authInfo);;
+		pblock.innerHTML = CmdUtils.renderTemplate(msg, authInfo);
 	},
 	execute: function execute(args) {
 		if (args.object.text.length < 1) {
