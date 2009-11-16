@@ -1,6 +1,10 @@
 
 // 4konverta API is availabele at http://code.google.com/p/4k-api/wiki/ApiDescription
 
+// Ubiquity docs:
+// https://wiki.mozilla.org/Labs/Ubiquity
+// https://wiki.mozilla.org/Labs/Ubiquity/Ubiquity_0.5_Author_Tutorial
+
 Envelopes = {
 	_userInfo: null,
 	_reqId: 0
@@ -130,28 +134,26 @@ Envelopes.renderXml = function(pblock, data, textStatus) {
 		+ data.replace(/</g,'&lt;');
 }
 
+Envelopes.MSG_USER_INFO = '<font size="+2"><b>${auth.name}</b> \
+({for p in user.persons}<b>${p.name}</b> {if p != user.persons[user.persons.length-1]}, {/if}{/for})</font><br/>\
+<div>Accounts:<table> \
+{for a in user.accounts} \
+	<tr><td><b>${a.name}</b></td><td>${a.value}</td></tr> \
+{forelse} \
+	No accounts defined\
+{/for} \
+</table></div>';
+
 Envelopes.handleUserInfo = function(pblock, data, textStatus) {
-	var msg = '<b>This is cusotom renderer</b><br/>'
-		//+ '${user.country.name}'
-		+ '<hr/>${rawData}';
 	var rawData = data.replace(/</g,'&lt;');
-	
 	var userInfo = Envelopes.parseUserInfo(data);
-	CmdUtils.log(userInfo);
-	//CmdUtils.log(userInfo.country);
-	//CmdUtils.log(userInfo.currency);
-	//CmdUtils.log(userInfo.firstDayOfWeek);
-	//CmdUtils.log(userInfo.timeZone);
-	//CmdUtils.log(userInfo.disableExtendedSyntax);
-	//CmdUtils.log(userInfo.persons);
-	//CmdUtils.log(userInfo.accounts);
-
-	pblock.innerHTML = CmdUtils.renderTemplate(msg, {rawData:rawData, user:userInfo});;
-
+	//CmdUtils.log(userInfo);
+	var authInfo = Envelopes.getAuthInfo();
+	pblock.innerHTML = CmdUtils.renderTemplate(Envelopes.MSG_USER_INFO, {user: userInfo, auth: authInfo});;
 }
 
 Envelopes.parseUserInfo = function (data) {
-	var user = {};
+	var user = {_data: data};
 	var $ = jQuery;
 	var $u = $(data);
 
