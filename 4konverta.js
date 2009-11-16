@@ -1,7 +1,10 @@
 
 // 4konverta API is availabele at http://code.google.com/p/4k-api/wiki/ApiDescription
 
-Envelopes = {};
+Envelopes = {
+	_userInfo: null,
+	_reqId: 0
+};
 
 Envelopes.API_APP_ID = "a40194378";
 Envelopes.API_VERSION = "1.1";
@@ -19,6 +22,10 @@ Envelopes.Prefs = {
 
 Envelopes.getBaseURL = function() {
 	return 'https://www.4konverta.com';
+}
+
+Envelopes.getUserInfo = function() {
+	return Envelopes._userInfo;
 }
 
 Envelopes.setPrefValue = function (name, value) {
@@ -226,7 +233,7 @@ Envelopes.sendAjaxRequest = function(async, pblock, resource, onSuccess, onError
 }
 
 CmdUtils.CreateCommand({
-	names: ["4k-user"],
+	names: ["4k info"],
 	icon: "http://www.4konverta.com/favicon.ico",
 	description: "Get user info from www.4konverta.com",
 	help: "",
@@ -246,7 +253,7 @@ CmdUtils.CreateCommand({
 });
 
 CmdUtils.CreateCommand({
-	names: ["4k-login"],
+	names: ["4k login"],
 	icon: "http://www.4konverta.com/favicon.ico",
 	description: "Sets the login name and password for www.4konverta.com",
 	help: "Specify user name and password for www.4konverta.com.<br/>Example: <b>4k-login myname with secr3t</b>",
@@ -283,7 +290,7 @@ CmdUtils.CreateCommand({
 });
 
 CmdUtils.CreateCommand({
-	names: ["4k-logout"],
+	names: ["4k logout"],
 	icon: "http://www.4konverta.com/favicon.ico",
 	description: "Clears login name and password for www.4konverta.com from internal settings",
 	help: "Execute this command to clear login name and password from internal settings.<br/>Example: <b>4k-logout</b>",
