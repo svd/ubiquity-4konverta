@@ -9,7 +9,7 @@ Envelopes = {
 	_userInfo: null,
 	_reqId: 0
 };
-//CmdUtils.log('Unitializing...');
+CmdUtils.log('Unitializing 4konverta...');
 
 Envelopes.API_APP_ID = "a40194378";
 Envelopes.API_VERSION = "1.1";
@@ -31,6 +31,14 @@ Envelopes.getBaseURL = function() {
 
 Envelopes.getUserInfo = function() {
 	return Envelopes._userInfo;
+}
+
+Envelopes.setUserInfo = function(user) {
+	Envelopes._userInfo = user;
+}
+
+Envelopes.reset = function() {
+	Envelopes._userInfo = null;
 }
 
 Envelopes.setPrefValue = function (name, value) {
@@ -68,9 +76,7 @@ Envelopes.LOGIN_KEY = '4konverta.login';
 // Currently only first loing name is used
 // We can allow to store several logins and keep current login in preferences
 Envelopes.setAuthInfo = function(username, password) {
-	// TODO: use password manager to store login/password instead of preferences
-	//Envelopes.setPrefValue(Envelopes.Prefs.USERNAME, name);
-	//Envelopes.setPrefValue(Envelopes.Prefs.PASSWORD, password);	
+	Envelopes.reset();
 	var opts = {
 		name: Envelopes.LOGIN_KEY,
 		username: username,
@@ -82,6 +88,7 @@ Envelopes.setAuthInfo = function(username, password) {
 
 // CmdUtils does not have removeLogin method exposed, so accessing passwordManager directly
 Envelopes.clearAuthInfo = function() {
+	Envelopes.reset();
 	try {
 		// Get Login Manager 
 		var passwordManager = Components.classes["@mozilla.org/login-manager;1"]
@@ -172,22 +179,37 @@ Envelopes.renderXml = function(pblock, data, textStatus) {
 		+ data.replace(/</g,'&lt;');
 }
 
-Envelopes.MSG_USER_INFO = '<font size="+2"><b>${auth.name}</b> \
-({for p in user.persons}<b>${p.name}</b> {if p != user.persons[user.persons.length-1]}, {/if}{/for})</font><br/>\
-<div>Accounts:<table> \
-{for a in user.accounts} \
-	<tr><td><b>${a.name}</b></td><td>${a.value}</td></tr> \
-{forelse} \
-	No accounts defined\
-{/for} \
-</table></div>';
-
-Envelopes.handleUserInfo = function(pblock, data, textStatus) {
-	var rawData = data.replace(/</g,'&lt;');
-	var userInfo = Envelopes.parseUserInfo(data);
-	//CmdUtils.log(userInfo);
+Envelopes.sendAjaxRequest = function(async, pblock, resource, onSuccess, onError) {
 	var authInfo = Envelopes.getAuthInfo();
-	pblock.innerHTML = CmdUtils.renderTemplate(Envelopes.MSG_USER_INFO, {user: userInfo, auth: authInfo});;
+	if ( !Envelopes.isAuthInfoValid(authInfo) ) {
+		var msg = _('Your username/password information is not set.'
+			+' Please use <b>4k-login</b> command to set your username and password and try again.');
+		pblock.innerHTML = CmdUtils.renderTemplate(msg, {user: authInfo.name, url: url});
+		return;
+	}
+	var url = CmdUtils.renderTemplate(Envelopes.getBaseURL() + resource, 
+		{user: authInfo.name});
+	var msg = _('Loading information for user "<b>${user}</b>"...');
+	pblock.innerHTML = CmdUtils.renderTemplate(msg, {user: authInfo.name});
+	
+	var successHandler = onSuccess || Envelopes.renderXml;
+	var errorHandler = onError || Envelopes.handleAjaxError;
+	
+	jQuery.ajax({
+		type: 'POST',
+		url: url,
+		beforeSend: function(xhr) {
+			Envelopes.setRequestHeaders(xhr, authInfo);
+			return true;
+		},
+		success: function(data, textStatus) {
+			successHandler.call(this, pblock, data, textStatus);
+		},
+		error: function(req, textStatus, errorThrown) {
+			errorHandler.call(this, pblock, req, textStatus, errorThrown);
+		}
+	});
+	
 }
 
 Envelopes.parseUserInfo = function (data) {
@@ -239,37 +261,35 @@ Envelopes.parseUserInfo = function (data) {
 	return user;
 }
 
-Envelopes.sendAjaxRequest = function(async, pblock, resource, onSuccess, onError) {
-	var authInfo = Envelopes.getAuthInfo();
-	if ( !Envelopes.isAuthInfoValid(authInfo) ) {
-		var msg = _('Your username/password information is not set.'
-			+' Please use <b>4k-login</b> command to set your username and password and try again.');
-		pblock.innerHTML = CmdUtils.renderTemplate(msg, {user: authInfo.name, url: url});
-		return;
-	}
-	var url = CmdUtils.renderTemplate(Envelopes.getBaseURL() + resource, 
-		{user: authInfo.name});
-	var msg = _('Loading information for user "<b>${user}</b>"...');
-	pblock.innerHTML = CmdUtils.renderTemplate(msg, {user: authInfo.name});
+Envelopes.handleUserInfo = function(pblock, data, textStatus) {
+	var userInfo = Envelopes.parseUserInfo(data);
+	//CmdUtils.log(userInfo);
 	
-	var successHandler = onSuccess || Envelopes.renderXml;
-	var errorHandler = onError || Envelopes.handleAjaxError;
-	
-	jQuery.ajax({
-		type: 'POST',
-		url: url,
-		beforeSend: function(xhr) {
-			Envelopes.setRequestHeaders(xhr, authInfo);
-			return true;
-		},
-		success: function(data, textStatus) {
-			successHandler.call(this, pblock, data, textStatus);
-		},
-		error: function(req, textStatus, errorThrown) {
-			errorHandler.call(this, pblock, req, textStatus, errorThrown);
+	Envelopes.setUserInfo(userInfo);
+	Envelopes.displayUserInfo(pblock, false);
+}
+
+Envelopes.MSG_USER_INFO = '<font size="+2"><b>${auth.name}</b> \
+({for p in user.persons}<b>${p.name}</b> {if p != user.persons[user.persons.length-1]}, {/if}{/for})</font><br/>\
+<div>Accounts:<table> \
+{for a in user.accounts} \
+	<tr><td><b>${a.name}</b></td><td>${a.value}</td></tr> \
+{forelse} \
+	No accounts defined\
+{/for} \
+</table></div>';
+
+Envelopes.displayUserInfo = function(pblock, loadMissing) {
+	var userInfo = Envelopes.getUserInfo();
+	if (userInfo != null) {
+		var authInfo = Envelopes.getAuthInfo();	
+		pblock.innerHTML = CmdUtils.renderTemplate(Envelopes.MSG_USER_INFO, {user: userInfo, auth: authInfo});;
+	} else {
+		if (loadMissing) {
+			Envelopes.sendAjaxRequest(true, pblock, Envelopes.API.USER_INFO, Envelopes.handleUserInfo, null);
 		}
-	});
-	
+	}
+
 }
 
 CmdUtils.CreateCommand({
@@ -284,8 +304,7 @@ CmdUtils.CreateCommand({
 	arguments: [{role: 'object', nountype: noun_arb_text}],
 
 	preview: function preview(pblock, args) {
-		var authInfo = Envelopes.getAuthInfo();
-		Envelopes.sendAjaxRequest(true, pblock, Envelopes.API.USER_INFO, Envelopes.handleUserInfo, null);
+		Envelopes.displayUserInfo(pblock, true);
 	},
 	execute: function execute(args) {
 		//displayMessage("You selected: " + args.object.text, this);
@@ -351,6 +370,21 @@ CmdUtils.CreateCommand({
 	execute: function execute(args) {
 		Envelopes.clearAuthInfo();
 		displayMessage('Login information cleared', this);
+	}
+});
+
+CmdUtils.CreateCommand({
+	names: ["4k reset"],
+	icon: "http://www.4konverta.com/favicon.ico",
+	description: "Reset internal caches",
+	help: "Execute this command to reset internally cached infromation like infromation about user, accoutns, etc.",
+	author: {name: "Sviatoslav Sviridov", email: "sviridov@gmail.com"},
+	license: "GPL",
+	homepage: "http://github.com/svd/ubiquity-4konverta/",
+
+	execute: function execute(args) {
+		Envelopes.reset();
+		displayMessage('4konverta Reset complete', this);
 	}
 });
 
