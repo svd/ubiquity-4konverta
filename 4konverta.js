@@ -9,6 +9,7 @@ Envelopes = {
 	_userInfo: null,
 	_reqId: 0
 };
+//CmdUtils.log('Unitializing...');
 
 Envelopes.API_APP_ID = "a40194378";
 Envelopes.API_VERSION = "1.1";
@@ -106,7 +107,7 @@ Envelopes.clearAuthInfo = function() {
 
 Envelopes.getAuthInfo = function() {
 	var logins = CmdUtils.retrieveLogins(Envelopes.LOGIN_KEY);
-	CmdUtils.log(logins);
+	//CmdUtils.log(logins);
 	
 	var auth = {
 		name: null,
