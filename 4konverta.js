@@ -61,24 +61,61 @@ Envelopes.getPrefValue = function (name) {
 	return null;
 }
 
-Envelopes.setAuthInfo = function(name, password) {
+Envelopes.LOGIN_KEY = '4konverta.login';
+
+// TODO: Handle multiple logins
+// Currently only first loing name is used
+// We can allow to store several logins and keep current login in preferences
+Envelopes.setAuthInfo = function(username, password) {
 	// TODO: use password manager to store login/password instead of preferences
-	Envelopes.setPrefValue(Envelopes.Prefs.USERNAME, name);
-	Envelopes.setPrefValue(Envelopes.Prefs.PASSWORD, password);	
+	//Envelopes.setPrefValue(Envelopes.Prefs.USERNAME, name);
+	//Envelopes.setPrefValue(Envelopes.Prefs.PASSWORD, password);	
+	var opts = {
+		name: Envelopes.LOGIN_KEY,
+		username: username,
+		password: password
+	};
+	CmdUtils.savePassword(opts);
 	return;
 }
 
+// CmdUtils does not have removeLogin method exposed, so accessing passwordManager directly
 Envelopes.clearAuthInfo = function() {
-	Envelopes.deletePrefValue(Envelopes.Prefs.USERNAME);
-	Envelopes.deletePrefValue(Envelopes.Prefs.PASSWORD);	
+	try {
+		// Get Login Manager 
+		var passwordManager = Components.classes["@mozilla.org/login-manager;1"]
+			.getService(Components.interfaces.nsILoginManager);
+
+		// Find users for this extension 
+		var logins = passwordManager.findLogins({}, 
+			'chrome://ubiquity/content', 
+			"UbiquityInformation" + Envelopes.LOGIN_KEY, 
+			null);
+
+		for (var i = 0; i < logins.length; i++) {
+			//CmdUtils.log(logins[i]);
+			passwordManager.removeLogin(logins[i]);
+		}
+	}
+	catch(ex) {
+		CmdUtils.log(ex);
+		// This will only happen if there is no nsILoginManager component class
+	}
 	return;
 }
 
 Envelopes.getAuthInfo = function() {
+	var logins = CmdUtils.retrieveLogins(Envelopes.LOGIN_KEY);
+	CmdUtils.log(logins);
+	
 	var auth = {
-		name: Envelopes.getPrefValue(Envelopes.Prefs.USERNAME),
-		password: Envelopes.getPrefValue(Envelopes.Prefs.PASSWORD)
-	};	
+		name: null,
+		password: null
+	};
+	if (logins && logins.length > 0) {
+		auth.name = logins[0].username;
+		auth.password = logins[0].password;
+	}
 	return auth;
 }
 
