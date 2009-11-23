@@ -1,9 +1,11 @@
 
-// 4konverta API is availabele at http://code.google.com/p/4k-api/wiki/ApiDescription
+// 4konverta API is availabele at
+// http://code.google.com/p/4k-api/wiki/ApiDescription
 
 // Ubiquity docs:
 // https://wiki.mozilla.org/Labs/Ubiquity
 // https://wiki.mozilla.org/Labs/Ubiquity/Ubiquity_0.5_Author_Tutorial
+// http://code.google.com/p/trimpath/wiki/JavaScriptTemplates
 
 Envelopes = {
 	_userInfo: null,
@@ -291,6 +293,42 @@ Envelopes.displayUserInfo = function(pblock, loadMissing) {
 	}
 
 }
+
+noun_account = {
+	label: "account",
+	suggest: function(text, html, callback, selectionIndices) {
+		var userInfo = Envelopes.getUserInfo();
+		var accounts = userInfo!=null ? userInfo.accounts : [];
+		var result = [];
+		for (var i in accounts) {
+			//CmdUtils.log(accounts[i]);
+			if (accounts[i].name.match(text, "i")) {
+				result.push(CmdUtils.makeSugg(accounts[i].name, null, accounts[i].id));
+			}
+		}
+		return result;
+	}
+};
+
+CmdUtils.CreateCommand({
+	names: ["4k daily expense"],
+	icon: "http://www.4konverta.com/favicon.ico",
+	description: "Sumbit regular expense",
+	help: "",
+	author: {name: "Sviatoslav Sviridov", email: "sviridov@gmail.com"},
+	license: "GPL",
+	homepage: "http://github.com/svd/ubiquity-4konverta/",
+
+	arguments: [{role: 'object', nountype: noun_arb_text},
+				{role: 'source', nountype: noun_account, label: 'source account'}],
+
+	preview: function preview(pblock, args) {
+		Envelopes.displayUserInfo(pblock, true);
+	},
+	execute: function execute(args) {
+		//displayMessage("You selected: " + args.object.text, this);
+	}
+});
 
 CmdUtils.CreateCommand({
 	names: ["4k info"],
