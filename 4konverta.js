@@ -14,8 +14,16 @@ Envelopes = {
 CmdUtils.log('Unitializing 4konverta...');
 
 DEBUG=true;
+DEBUG2=false;
+
 Envelopes.debug = function(data) {
 	if (DEBUG) {
+		CmdUtils.log(data);
+	}
+}
+
+Envelopes.debug2 = function(data) {
+	if (DEBUG2) {
 		CmdUtils.log(data);
 	}
 }
@@ -111,7 +119,7 @@ Envelopes.getCurrentPerson = function(arg) {
 Envelopes.setCurrentPersonId = function(arg) {
 	if (arg != null && arg.data) {
 		Envelopes.setPrefValue(Envelopes.Prefs.PERSON, arg.data);
-		Envelopes.debug('setCurrentPersonId: ' + arg.data);
+		//Envelopes.debug('setCurrentPersonId: ' + arg.data);
 	}
 }
 
@@ -146,7 +154,7 @@ Envelopes.getCurrentAccount = function(arg) {
 Envelopes.setCurrentAccountId = function(arg) {
 	if (arg != null && arg.data) {
 		Envelopes.setPrefValue(Envelopes.Prefs.ACCOUNT, arg.data);
-		Envelopes.debug('setCurrentAccountId: ' + arg.data);
+		//Envelopes.debug('setCurrentAccountId: ' + arg.data);
 	}
 }
 
@@ -282,10 +290,10 @@ Envelopes.sendAjaxRequest = function(async, pblock, resource, onSuccess, onError
 	if (doGET) {
 		reqType = 'GET';
 	}
-	Envelopes.debug('Request type: ' + reqType);
+	Envelopes.debug2('Request type: ' + reqType);
 	var url = CmdUtils.renderTemplate(Envelopes.getBaseURL() + resource, 
 		{user: authInfo.name});
-	Envelopes.debug('Request URL: ' + url);
+	Envelopes.debug2('Request URL: ' + url);
 	
 	//var msg = _('Loading information for user "<b>${user}</b>"...');
 	//pblock.innerHTML = CmdUtils.renderTemplate(msg, {user: authInfo.name});
@@ -301,7 +309,7 @@ Envelopes.sendAjaxRequest = function(async, pblock, resource, onSuccess, onError
 			return true;
 		},
 		success: function(data, textStatus) {
-			Envelopes.debug('Request successful: ' + url);
+			Envelopes.debug2('Request successful: ' + url);
 			successHandler.call(this, pblock, data, textStatus, cbData);
 		},
 		error: function(req, textStatus, errorThrown) {
@@ -379,7 +387,7 @@ Envelopes.parseDailyExpence = function (data) {
 		};
 		de.expressions.push(expr);
 	});
-	Envelopes.debug(de);
+	//Envelopes.debug(de);
 	return de;
 }
 
@@ -452,6 +460,7 @@ td.first-column { \
 tr.summary { \
 	border-width: 1px; \
 	border-style: solid none solid; \
+	font-weight: bold; \
 } \
 .hint { \
 	color: lightgrey; \
@@ -484,10 +493,15 @@ Envelopes.MACROS = ' \
 Envelopes.MSG_DAILY_EXPENSE_HEADER = Envelopes.HTML_STYLES + Envelopes.MACROS + 
 '<div class="h1">Submit expence</div> \
 <table>\
-<tr><td class="first-column">Expression</td><td><b> \
-	{if args.object.text.length > 0}${args.object.text} \
-	{else}<div class="error">Please enter expression</div> \
-	{/if}</b></td></tr> \
+<tr><td class="first-column">Expression</td><td> \
+	{if args.object.text.length > 0} \
+		${args.object.text} \
+		{if currency!=null} \
+			<div class="hint">Using currency: ${currency.code}</div>\
+		{/if}\
+	{else}<div class="error">Please enter expression</div>{/if} \
+	</td> \
+</tr> \
 <tr><td class="first-column">Account</td><td><b> \
 	{if account != null} ${account.name}\
 	{else}<div class="error">Please select account</div> \
@@ -544,11 +558,13 @@ Envelopes.loadDailyExpences = function(pblock, args, loadUserInfo) {
 		return;
 	}
 	var authInfo = Envelopes.getAuthInfo();
+	var acc = Envelopes.getCurrentAccount(args.source);
 	//var data = args.time.data;
 	var cbData = {args: args, 
 		personId: Envelopes.getCurrentPersonId(args.alias), 
 		person: Envelopes.getCurrentPerson(args.alias),
-		account: Envelopes.getCurrentAccount(args.source),
+		account: acc,
+		currency: acc != null ? acc.currency : null,
 		date: args.time.text, 
 		user: authInfo.name,
 		userInfo: Envelopes.getUserInfo(),
@@ -563,7 +579,6 @@ Envelopes.loadDailyExpences = function(pblock, args, loadUserInfo) {
 			true, cbData);
 		return;
 	}
-	CmdUtils.log(args);
 	if (args.alias.text.length < 1) {
 		cbData.personName = null;
 	}
@@ -574,14 +589,13 @@ Envelopes.loadDailyExpences = function(pblock, args, loadUserInfo) {
 	
 	if (cbData.personId != null && cbData.date != null) {
 		var url = CmdUtils.renderTemplate(Envelopes.API.DAILY_EXPENSE, cbData);
-		Envelopes.debug('DailyExpense url: ' + url);
+		//Envelopes.debug('DailyExpense url: ' + url);
 		Envelopes.sendAjaxRequest(true, pblock, url, Envelopes.displayDailyExpences, null, true, cbData);
 	}
 }
 
 Envelopes.displayDailyExpences = function(pblock, data, textStatus, cbData) {
-	Envelopes.debug(data);
-	Envelopes.debug(cbData);
+	Envelopes.debug2(cbData);
 	var de = Envelopes.parseDailyExpence(data);
 	cbData.de = de;
 	
@@ -638,8 +652,6 @@ CmdUtils.CreateCommand({
 				{role: 'time', nountype: noun_type_date, label: 'date'}],
 
 	preview: function preview(pblock, args) {
-		CmdUtils.log(args.alias);
-		CmdUtils.log(args.time.data);
 		Envelopes.loadDailyExpences(pblock, args, true);
 	},
 	execute: function execute(args) {
