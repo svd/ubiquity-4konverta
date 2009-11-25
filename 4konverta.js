@@ -29,10 +29,11 @@ Envelopes.Headers = {
 	VERSION: "4KVersion"
 };
 
-//Envelopes.Prefs = {
-//	USERNAME: "ubiquity.4konverta.username",
-//	PASSWORD: "ubiquity.4konverta.password"
-//};
+Envelopes.Prefs = {
+	PERSON: "4konverta.person",
+	ACCOUNT: "4konverta.account",
+	CURRENCY: "4konverta.currency"
+};
 
 Envelopes.getBaseURL = function() {
 	return 'https://www.4konverta.com';
@@ -77,6 +78,76 @@ Envelopes.getPrefValue = function (name) {
 		return value != null ? value.value : null;
 	}
 	return null;
+}
+
+// arg is an noun_type object retreived as one of command args
+Envelopes.getCurrentPersonId = function(arg) {
+	var personId = null;
+	if (arg != null && arg.data) {
+		personId = arg.data;
+	}
+	if (personId == null) {
+		personId = Envelopes.getPrefValue(Envelopes.Prefs.PERSON);
+	}
+	//Envelopes.debug('getCurrentPersonId: ' + personId);
+	return personId;
+}
+
+// arg is an noun_type object retreived as one of command args
+Envelopes.getCurrentPerson = function(arg) {
+	var personId = Envelopes.getCurrentPersonId(arg);
+	var userInfo = Envelopes.getUserInfo();
+	if (personId != null && userInfo != null) {
+		for (p in userInfo.persons) {
+			if (userInfo.persons[p].id == personId) {
+				return userInfo.persons[p];
+			}
+		}
+	}
+	return null;
+}
+
+// arg is an noun_type object retreived as one of command args
+Envelopes.setCurrentPersonId = function(arg) {
+	if (arg != null && arg.data) {
+		Envelopes.setPrefValue(Envelopes.Prefs.PERSON, arg.data);
+		Envelopes.debug('setCurrentPersonId: ' + arg.data);
+	}
+}
+
+// arg is an noun_type object retreived as one of command args
+Envelopes.getCurrentAccountId = function(arg) {
+	var accountId = null;
+	if (arg != null && arg.data) {
+		accountId = arg.data;
+	}
+	if (accountId == null) {
+		accountId = Envelopes.getPrefValue(Envelopes.Prefs.ACCOUNT);
+	}
+	//Envelopes.debug('getCurrentAccountId: ' + accountId);
+	return accountId;
+}
+
+// arg is an noun_type object retreived as one of command args
+Envelopes.getCurrentAccount = function(arg) {
+	var accountId = Envelopes.getCurrentAccountId(arg);
+	var userInfo = Envelopes.getUserInfo();
+	if (accountId != null && userInfo != null) {
+		for (a in userInfo.accounts) {
+			if (userInfo.accounts[a].id == accountId) {
+				return userInfo.accounts[a];
+			}
+		}
+	}
+	return null;
+}
+
+// arg is an noun_type object retreived as one of command args
+Envelopes.setCurrentAccountId = function(arg) {
+	if (arg != null && arg.data) {
+		Envelopes.setPrefValue(Envelopes.Prefs.ACCOUNT, arg.data);
+		Envelopes.debug('setCurrentAccountId: ' + arg.data);
+	}
 }
 
 Envelopes.LOGIN_KEY = '4konverta.login';
@@ -363,7 +434,7 @@ table { \
 	border-spacing:0px; \
 	border-width: 1px; \
 	border-collapse: collapse; \
-	border-style: dotted none dotted; \
+	border-style: solid none solid; \
 	width: 100%; \
 } \
 td { \
@@ -378,6 +449,10 @@ td.first-column { \
 	font-weight: bold; \
 	padding-right: 8px \
 }\
+tr.summary { \
+	border-width: 1px; \
+	border-style: solid none solid; \
+} \
 .hint { \
 	color: lightgrey; \
 	font-size: x-small; \
@@ -399,6 +474,11 @@ Envelopes.MACROS = ' \
 		{if a.id == accountId}${a.name}{/if} \
 	{/for} \
 {/macro} \
+{macro accountCurrencyCode(accountId, userInfo)} \
+	{for a in userInfo.accounts} \
+		{if a.id == accountId}${a.currency.code}{/if} \
+	{/for} \
+{/macro} \
 ';
 
 Envelopes.MSG_DAILY_EXPENSE_HEADER = Envelopes.HTML_STYLES + Envelopes.MACROS + 
@@ -409,20 +489,20 @@ Envelopes.MSG_DAILY_EXPENSE_HEADER = Envelopes.HTML_STYLES + Envelopes.MACROS +
 	{else}<div class="error">Please enter expression</div> \
 	{/if}</b></td></tr> \
 <tr><td class="first-column">Account</td><td><b> \
-	{if args.source.data != null} ${args.source.text}\
-	{else}<font color="red">Please select account</font> \
+	{if account != null} ${account.name}\
+	{else}<div class="error">Please select account</div> \
 	{/if}</b> \
 		<div class="hint">Available accounts:&nbsp; \
 		{for a in userInfo.accounts} \
-			<b>${a.name}</b> \
+			<b>${a.name} (${a.value})</b> \
 			{if a != userInfo.accounts[userInfo.accounts.length-1]}, {/if} \
 		{/for} \
 		</div> \
 	</td> \
 </tr> \
 <tr><td class="first-column">Person</td><td><b> \
-	{if args.alias.data != null} ${args.alias.text}\
-	{else}<font color="red">Please select person</font> \
+	{if person != null} ${person.name}\
+	{else}<div class="error">Please select person</div> \
 	{/if}</b> \
 		<div class="hint">Available persons:&nbsp; \
 		{for p in userInfo.persons} \
@@ -441,8 +521,14 @@ Envelopes.MSG_DAILY_EXPENSE_HEADER = Envelopes.HTML_STYLES + Envelopes.MACROS +
 	<table> \
 	<!--<thead><th>Account</th><th>Expence</th></thead>-->\
 	{for e in de.expressions} \
-		<tr><td class="first-column">${accountName(e.account,userInfo)}</td><td valign="top">${e.lines}</td></tr>  \
+		<tr> \
+		<td class="first-column"> \
+			${accountName(e.account,userInfo)} (${accountCurrencyCode(e.account,userInfo).trim()}) \
+		</td>\
+		<td>${e.lines}</td> \
+		</tr>  \
 	{/for}\
+	<tr class="summary"><td class="first-column">Total</td><td>${de.sum}</td></tr>  \
 	</table>\
 {elseif rawData != null} \
 	${rawData} \
@@ -458,12 +544,11 @@ Envelopes.loadDailyExpences = function(pblock, args, loadUserInfo) {
 		return;
 	}
 	var authInfo = Envelopes.getAuthInfo();
-	CmdUtils.log('personId: ' + args.alias.data);
-	CmdUtils.log('date: ' + args.time.data);
-	var data = args.time.data;
+	//var data = args.time.data;
 	var cbData = {args: args, 
-		personId: args.alias.data, 
-		personName: args.alias.text, 
+		personId: Envelopes.getCurrentPersonId(args.alias), 
+		person: Envelopes.getCurrentPerson(args.alias),
+		account: Envelopes.getCurrentAccount(args.source),
 		date: args.time.text, 
 		user: authInfo.name,
 		userInfo: Envelopes.getUserInfo(),
@@ -547,8 +632,8 @@ CmdUtils.CreateCommand({
 	license: "GPL",
 	homepage: "http://github.com/svd/ubiquity-4konverta/",
 
-	arguments: [{role: 'object', nountype: noun_arb_text},
-				{role: 'source', nountype: noun_type_account, label: 'source account'},
+	arguments: [{role: 'object', nountype: noun_arb_text, label: 'expression'},
+				{role: 'source', nountype: noun_type_account, label: 'account'},
 				{role: 'alias', nountype: noun_type_person, label: 'person'},
 				{role: 'time', nountype: noun_type_date, label: 'date'}],
 
@@ -559,6 +644,8 @@ CmdUtils.CreateCommand({
 	},
 	execute: function execute(args) {
 		//displayMessage("You selected: " + args.object.text, this);
+		Envelopes.setCurrentPersonId(args.alias);
+		Envelopes.setCurrentAccountId(args.source);
 	}
 });
 
