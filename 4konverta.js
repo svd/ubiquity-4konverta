@@ -281,7 +281,7 @@ Envelopes.isAuthInfoAvailable = function (pblock) {
 	}
 }
 
-Envelopes.sendAjaxRequest = function(async, pblock, resource, onSuccess, onError, doGET, cbData) {
+Envelopes.sendAjaxRequest = function(async, pblock, resource, data, onSuccess, onError, doGET, cbData) {
 	if ( !Envelopes.isAuthInfoAvailable(pblock) ) {
 		return;
 	}
@@ -424,7 +424,7 @@ Envelopes.displayUserInfo = function(pblock, loadMissing) {
 		if (loadMissing) {
 			var msg = _('Loading information for user "<b>${user}</b>"...');
 			pblock.innerHTML = CmdUtils.renderTemplate(msg, {user: authInfo.name});
-			Envelopes.sendAjaxRequest(true, pblock, Envelopes.API.USER_INFO, Envelopes.handleUserInfo, null);
+			Envelopes.sendAjaxRequest(true, pblock, Envelopes.API.USER_INFO, null, Envelopes.handleUserInfo, null);
 		}
 	}
 }
@@ -575,22 +575,18 @@ Envelopes.loadDailyExpences = function(pblock, args, loadUserInfo) {
 
 	if (cbData.userInfo == null) {
 		pblock.innerHTML = CmdUtils.renderTemplate(_("Loading user information..."));
-		Envelopes.sendAjaxRequest(true, pblock, Envelopes.API.USER_INFO, Envelopes.handleUserInfoForDailyExpence, null, 
+		Envelopes.sendAjaxRequest(true, pblock, Envelopes.API.USER_INFO, null, Envelopes.handleUserInfoForDailyExpence, null, 
 			true, cbData);
 		return;
 	}
-	if (args.alias.text.length < 1) {
-		cbData.personName = null;
-	}
-	if (cbData.personId != null && cbData.date != null) {
+	if (cbData.person != null && cbData.date != null) {
 		cbData.inputValid = true;
 	}
 	pblock.innerHTML = CmdUtils.renderTemplate(Envelopes.MSG_DAILY_EXPENSE_HEADER, cbData);
 	
-	if (cbData.personId != null && cbData.date != null) {
+	if (cbData.inputValid) {
 		var url = CmdUtils.renderTemplate(Envelopes.API.DAILY_EXPENSE, cbData);
-		//Envelopes.debug('DailyExpense url: ' + url);
-		Envelopes.sendAjaxRequest(true, pblock, url, Envelopes.displayDailyExpences, null, true, cbData);
+		Envelopes.sendAjaxRequest(true, pblock, url, null, Envelopes.displayDailyExpences, null, true, cbData);
 	}
 }
 
@@ -658,6 +654,23 @@ CmdUtils.CreateCommand({
 		//displayMessage("You selected: " + args.object.text, this);
 		Envelopes.setCurrentPersonId(args.alias);
 		Envelopes.setCurrentAccountId(args.source);
+		
+		//var personId = Envelopes.getCurrentPersonId(args.alias); 
+		var person = Envelopes.getCurrentPerson(args.alias);
+		var account = Envelopes.getCurrentAccount(args.source);
+		var currency = account != null ? account.currency : null;
+		var expr = args.object.text;
+		
+		if (person != null && account != null && currency != null && expr.length > 0) {
+			var data = {
+				expression: expr,
+				account: account.id,
+				currency: currency.id
+			};
+			displayMessage("Expense saved");
+		} else {
+			displayMessage("Not enough parameters");
+		}
 	}
 });
 
