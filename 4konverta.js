@@ -13,6 +13,13 @@ Envelopes = {
 };
 CmdUtils.log('Unitializing 4konverta...');
 
+DEBUG=true;
+Envelopes.debug = function(data) {
+	if (DEBUG) {
+		CmdUtils.log(data);
+	}
+}
+
 Envelopes.API_APP_ID = "a40194378";
 Envelopes.API_VERSION = "1.1";
 
@@ -22,10 +29,10 @@ Envelopes.Headers = {
 	VERSION: "4KVersion"
 };
 
-Envelopes.Prefs = {
-	USERNAME: "ubiquity.4konverta.username",
-	PASSWORD: "ubiquity.4konverta.password"
-};
+//Envelopes.Prefs = {
+//	USERNAME: "ubiquity.4konverta.username",
+//	PASSWORD: "ubiquity.4konverta.password"
+//};
 
 Envelopes.getBaseURL = function() {
 	return 'https://www.4konverta.com';
@@ -181,33 +188,53 @@ Envelopes.renderXml = function(pblock, data, textStatus) {
 		+ data.replace(/</g,'&lt;');
 }
 
-Envelopes.sendAjaxRequest = function(async, pblock, resource, onSuccess, onError) {
+Envelopes.isAuthInfoAvailable = function (pblock) {
 	var authInfo = Envelopes.getAuthInfo();
 	if ( !Envelopes.isAuthInfoValid(authInfo) ) {
 		var msg = _('Your username/password information is not set.'
 			+' Please use <b>4k-login</b> command to set your username and password and try again.');
-		pblock.innerHTML = CmdUtils.renderTemplate(msg, {user: authInfo.name, url: url});
+		if (pblock != null) {
+			pblock.innerHTML = CmdUtils.renderTemplate(msg, {});
+		}
+		return false;
+	} else {
+		return true;
+	}
+}
+
+Envelopes.sendAjaxRequest = function(async, pblock, resource, onSuccess, onError, doGET, cbData) {
+	if ( !Envelopes.isAuthInfoAvailable(pblock) ) {
 		return;
 	}
+	var authInfo = Envelopes.getAuthInfo();
+	var reqType = 'POST';
+	if (doGET) {
+		reqType = 'GET';
+	}
+	Envelopes.debug('Request type: ' + reqType);
 	var url = CmdUtils.renderTemplate(Envelopes.getBaseURL() + resource, 
 		{user: authInfo.name});
-	var msg = _('Loading information for user "<b>${user}</b>"...');
-	pblock.innerHTML = CmdUtils.renderTemplate(msg, {user: authInfo.name});
+	Envelopes.debug('Request URL: ' + url);
+	
+	//var msg = _('Loading information for user "<b>${user}</b>"...');
+	//pblock.innerHTML = CmdUtils.renderTemplate(msg, {user: authInfo.name});
 	
 	var successHandler = onSuccess || Envelopes.renderXml;
 	var errorHandler = onError || Envelopes.handleAjaxError;
 	
 	jQuery.ajax({
-		type: 'POST',
+		type: reqType,
 		url: url,
 		beforeSend: function(xhr) {
 			Envelopes.setRequestHeaders(xhr, authInfo);
 			return true;
 		},
 		success: function(data, textStatus) {
-			successHandler.call(this, pblock, data, textStatus);
+			Envelopes.debug('Request successful: ' + url);
+			successHandler.call(this, pblock, data, textStatus, cbData);
 		},
 		error: function(req, textStatus, errorThrown) {
+			Envelopes.debug('Request error: ' + url);
 			errorHandler.call(this, pblock, req, textStatus, errorThrown);
 		}
 	});
@@ -215,7 +242,7 @@ Envelopes.sendAjaxRequest = function(async, pblock, resource, onSuccess, onError
 }
 
 Envelopes.parseUserInfo = function (data) {
-	var user = {_data: data};
+	var user = {_rawData: data};
 	var $ = jQuery;
 	var $u = $(data);
 
@@ -263,6 +290,28 @@ Envelopes.parseUserInfo = function (data) {
 	return user;
 }
 
+Envelopes.parseDailyExpence = function (data) {
+	var de = {_rawData: data, date: null, defaultAccount: null, sum: null, expressions: []};
+	var $ = jQuery;
+	var $de = $(data);
+
+	de.date = $de.attr('date');
+	de.defaultAccount = $de.attr('defaultAccount');
+	de.sum = $de.find('sum').text();
+	$de.find('expression').each(function() {
+		var $expr = $(this);
+		var expr = {
+			account: $expr.attr('account'),
+			currency: $expr.attr('currency'),
+			value: $expr.text(),
+			lines: $expr.text().replace(/\n/g, '<br/>')
+		};
+		de.expressions.push(expr);
+	});
+	Envelopes.debug(de);
+	return de;
+}
+
 Envelopes.handleUserInfo = function(pblock, data, textStatus) {
 	var userInfo = Envelopes.parseUserInfo(data);
 	//CmdUtils.log(userInfo);
@@ -282,19 +331,182 @@ Envelopes.MSG_USER_INFO = '<font size="+2"><b>${auth.name}</b> \
 </table></div>';
 
 Envelopes.displayUserInfo = function(pblock, loadMissing) {
+	if ( !Envelopes.isAuthInfoAvailable(pblock) ) {
+		return;
+	}
+	var authInfo = Envelopes.getAuthInfo();
 	var userInfo = Envelopes.getUserInfo();
 	if (userInfo != null) {
-		var authInfo = Envelopes.getAuthInfo();	
-		pblock.innerHTML = CmdUtils.renderTemplate(Envelopes.MSG_USER_INFO, {user: userInfo, auth: authInfo});;
+		var authInfo = Envelopes.getAuthInfo();
+		if (pblock != null) {
+			pblock.innerHTML = CmdUtils.renderTemplate(Envelopes.MSG_USER_INFO, {user: userInfo, auth: authInfo});
+		}
 	} else {
 		if (loadMissing) {
+			var msg = _('Loading information for user "<b>${user}</b>"...');
+			pblock.innerHTML = CmdUtils.renderTemplate(msg, {user: authInfo.name});
 			Envelopes.sendAjaxRequest(true, pblock, Envelopes.API.USER_INFO, Envelopes.handleUserInfo, null);
 		}
 	}
-
 }
 
-noun_account = {
+Envelopes.handleUserInfoForDailyExpence = function(pblock, data, textStatus, cbData) {
+
+	var userInfo = Envelopes.parseUserInfo(data);
+	Envelopes.setUserInfo(userInfo);
+	Envelopes.loadDailyExpences(pblock, cbData.args, false);
+}
+
+Envelopes.HTML_STYLES = ' \
+<style type="text/css"> \
+table { \
+	border-spacing:0px; \
+	border-width: 1px; \
+	border-collapse: collapse; \
+	border-style: dotted none dotted; \
+	width: 100%; \
+} \
+td { \
+	border-color: white; \
+	border-width: 1px; \
+	border-style: dotted none dotted; \
+	vertical-align: top; \
+} \
+td.first-column { \
+	text-align: right; \
+	width: 20%; \
+	font-weight: bold; \
+	padding-right: 8px \
+}\
+.hint { \
+	color: lightgrey; \
+	font-size: x-small; \
+} \
+.error { \
+	color: red; \
+	font-weight: bold; \
+} \
+.h1 { \
+	font-weight: bold; \
+	font-size: larger; \
+} \
+</style> \
+';
+
+Envelopes.MACROS = ' \
+{macro accountName(accountId, userInfo)} \
+	{for a in userInfo.accounts} \
+		{if a.id == accountId}${a.name}{/if} \
+	{/for} \
+{/macro} \
+';
+
+Envelopes.MSG_DAILY_EXPENSE_HEADER = Envelopes.HTML_STYLES + Envelopes.MACROS + 
+'<div class="h1">Submit expence</div> \
+<table>\
+<tr><td class="first-column">Expression</td><td><b> \
+	{if args.object.text.length > 0}${args.object.text} \
+	{else}<div class="error">Please enter expression</div> \
+	{/if}</b></td></tr> \
+<tr><td class="first-column">Account</td><td><b> \
+	{if args.source.data != null} ${args.source.text}\
+	{else}<font color="red">Please select account</font> \
+	{/if}</b> \
+		<div class="hint">Available accounts:&nbsp; \
+		{for a in userInfo.accounts} \
+			<b>${a.name}</b> \
+			{if a != userInfo.accounts[userInfo.accounts.length-1]}, {/if} \
+		{/for} \
+		</div> \
+	</td> \
+</tr> \
+<tr><td class="first-column">Person</td><td><b> \
+	{if args.alias.data != null} ${args.alias.text}\
+	{else}<font color="red">Please select person</font> \
+	{/if}</b> \
+		<div class="hint">Available persons:&nbsp; \
+		{for p in userInfo.persons} \
+			<b>${p.name}</b> \
+			{if p != userInfo.persons[userInfo.persons.length-1]}, {/if} \
+		{/for} \
+		</div> \
+	</td> \
+</tr> \
+<tr><td class="first-column">Date</td><td>${date}</td></tr> \
+</table> \
+&nbsp; \
+<div> \
+{if de && de != null} \
+	<div class="h1">Reported expences</div> \
+	<table> \
+	<!--<thead><th>Account</th><th>Expence</th></thead>-->\
+	{for e in de.expressions} \
+		<tr><td class="first-column">${accountName(e.account,userInfo)}</td><td valign="top">${e.lines}</td></tr>  \
+	{/for}\
+	</table>\
+{elseif rawData != null} \
+	${rawData} \
+{elseif inputValid} \
+	Loading data... \
+{else} \
+	<div class="warning">Please enter all required parameters </div> \
+{/if} \
+</div>';
+
+Envelopes.loadDailyExpences = function(pblock, args, loadUserInfo) {
+	if ( !Envelopes.isAuthInfoAvailable(pblock) ) {
+		return;
+	}
+	var authInfo = Envelopes.getAuthInfo();
+	CmdUtils.log('personId: ' + args.alias.data);
+	CmdUtils.log('date: ' + args.time.data);
+	var data = args.time.data;
+	var cbData = {args: args, 
+		personId: args.alias.data, 
+		personName: args.alias.text, 
+		date: args.time.text, 
+		user: authInfo.name,
+		userInfo: Envelopes.getUserInfo(),
+		inputValid: false,
+		de: null,
+		rawData: null
+	};
+
+	if (cbData.userInfo == null) {
+		pblock.innerHTML = CmdUtils.renderTemplate(_("Loading user information..."));
+		Envelopes.sendAjaxRequest(true, pblock, Envelopes.API.USER_INFO, Envelopes.handleUserInfoForDailyExpence, null, 
+			true, cbData);
+		return;
+	}
+	CmdUtils.log(args);
+	if (args.alias.text.length < 1) {
+		cbData.personName = null;
+	}
+	if (cbData.personId != null && cbData.date != null) {
+		cbData.inputValid = true;
+	}
+	pblock.innerHTML = CmdUtils.renderTemplate(Envelopes.MSG_DAILY_EXPENSE_HEADER, cbData);
+	
+	if (cbData.personId != null && cbData.date != null) {
+		var url = CmdUtils.renderTemplate(Envelopes.API.DAILY_EXPENSE, cbData);
+		Envelopes.debug('DailyExpense url: ' + url);
+		Envelopes.sendAjaxRequest(true, pblock, url, Envelopes.displayDailyExpences, null, true, cbData);
+	}
+}
+
+Envelopes.displayDailyExpences = function(pblock, data, textStatus, cbData) {
+	Envelopes.debug(data);
+	Envelopes.debug(cbData);
+	var de = Envelopes.parseDailyExpence(data);
+	cbData.de = de;
+	
+	cbData.rawData = data.replace(/</g,'&lt;');
+	pblock.innerHTML = CmdUtils.renderTemplate(Envelopes.MSG_DAILY_EXPENSE_HEADER, cbData);
+
+	return;
+}
+
+noun_type_account = {
 	label: "account",
 	suggest: function(text, html, callback, selectionIndices) {
 		var userInfo = Envelopes.getUserInfo();
@@ -310,20 +522,40 @@ noun_account = {
 	}
 };
 
+noun_type_person = {
+	label: "person",
+	suggest: function(text, html, callback, selectionIndices) {
+		var userInfo = Envelopes.getUserInfo();
+		var persons = userInfo!=null ? userInfo.persons : [];
+		var result = [];
+		for (var i in persons) {
+			//CmdUtils.log(persons[i]);
+			if (persons[i].name.match(text, "i")) {
+				result.push(CmdUtils.makeSugg(persons[i].name, null, persons[i].id));
+			}
+		}
+		return result;
+	}
+};
+
 CmdUtils.CreateCommand({
-	names: ["4k daily expense"],
+	names: ["4k daily expense", "spent"],
 	icon: "http://www.4konverta.com/favicon.ico",
-	description: "Sumbit regular expense",
+	description: "Submit daily expence",
 	help: "",
 	author: {name: "Sviatoslav Sviridov", email: "sviridov@gmail.com"},
 	license: "GPL",
 	homepage: "http://github.com/svd/ubiquity-4konverta/",
 
 	arguments: [{role: 'object', nountype: noun_arb_text},
-				{role: 'source', nountype: noun_account, label: 'source account'}],
+				{role: 'source', nountype: noun_type_account, label: 'source account'},
+				{role: 'alias', nountype: noun_type_person, label: 'person'},
+				{role: 'time', nountype: noun_type_date, label: 'date'}],
 
 	preview: function preview(pblock, args) {
-		Envelopes.displayUserInfo(pblock, true);
+		CmdUtils.log(args.alias);
+		CmdUtils.log(args.time.data);
+		Envelopes.loadDailyExpences(pblock, args, true);
 	},
 	execute: function execute(args) {
 		//displayMessage("You selected: " + args.object.text, this);
