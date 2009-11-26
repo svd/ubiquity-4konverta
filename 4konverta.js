@@ -250,12 +250,22 @@ Envelopes.setRequestHeaders = function(xhr, authInfo) {
  */
 Envelopes.handleAjaxError = function(pblock, req, textStatus, errorThrown) {
 	if (req.status == 401) {
-		pblock.innerHTML = '<h1>Login failed</h1>'
-			+ 'Please check that you set correct login in <b>4k-login</b> command'
-			+ ' and also verify if you can log in at '
-			+ '<a href="https://www.4konverta.com/">https://www.4konverta.com/</a>';
+		if (pblock != null) {
+			pblock.innerHTML = '<h1>Login failed</h1>'
+				+ 'Please check that you set correct login in <b>4k-login</b> command'
+				+ ' and also verify if you can log in at '
+				+ '<a href="https://www.4konverta.com/">https://www.4konverta.com/</a>';
+		} else {
+			displayMessage('4konverta: Login failed');
+		}
 	} else {
-		pblock.innerHTML = '<h1>Unknown error</h1>';
+		if (pblock != null) {
+			pblock.innerHTML = '<h1>Unknown error</h1>';
+		} else {
+			Envelopes.debug(req);
+			Envelopes.debug(errorThrown);
+			displayMessage('4konverta: AJAX request failed');
+		}
 	}
 }
 
@@ -304,8 +314,10 @@ Envelopes.sendAjaxRequest = function(async, pblock, resource, data, onSuccess, o
 	jQuery.ajax({
 		type: reqType,
 		url: url,
+		data: data,
 		beforeSend: function(xhr) {
 			Envelopes.setRequestHeaders(xhr, authInfo);
+			CmdUtils.log(this);
 			return true;
 		},
 		success: function(data, textStatus) {
@@ -360,6 +372,7 @@ Envelopes.parseUserInfo = function (data) {
 		};
 		$(this).find('currency').each(function() {
 			account.currency = {
+				id: $(this).attr('id'),
 				code: $(this).attr('code'),
 				name: $(this).text()
 			};
@@ -601,6 +614,47 @@ Envelopes.displayDailyExpences = function(pblock, data, textStatus, cbData) {
 	return;
 }
 
+Envelopes.submitDailyExpence = function(args) {
+	if ( !Envelopes.isAuthInfoAvailable(null) ) {
+		displayMessage(_('Error: You are not logged in'));
+		return;
+	}
+	var authInfo = Envelopes.getAuthInfo();
+	//var personId = Envelopes.getCurrentPersonId(args.alias); 
+	var person = Envelopes.getCurrentPerson(args.alias);
+	var account = Envelopes.getCurrentAccount(args.source);
+	CmdUtils.log(account);
+	var currency = account != null ? account.currency : null;
+	CmdUtils.log(currency);
+	var date = args.time.text;
+	var expr = args.object.text;
+	
+	if (person != null && account != null && currency != null 
+			&& expr.length > 0 && date.length > 0) {
+		var data = {
+			expression: expr,
+			account: account.id,
+			currency: currency.id
+		};
+		var urlParams = {
+			personId: person.id, 
+			date: date, 
+			user: authInfo.name,
+		};
+		var url = CmdUtils.renderTemplate(Envelopes.API.DAILY_EXPENSE, urlParams);
+		CmdUtils.log('DE url: ' + url);
+		Envelopes.sendAjaxRequest(true, null, url, data, 
+			function(pblock, data, textStatus) {
+				displayMessage("Expense successfully saved!");
+			}, 
+			null
+		);
+		displayMessage("Saving expence...");
+	} else {
+		displayMessage("Not enough parameters");
+	}
+}
+
 noun_type_account = {
 	label: "account",
 	suggest: function(text, html, callback, selectionIndices) {
@@ -654,23 +708,7 @@ CmdUtils.CreateCommand({
 		//displayMessage("You selected: " + args.object.text, this);
 		Envelopes.setCurrentPersonId(args.alias);
 		Envelopes.setCurrentAccountId(args.source);
-		
-		//var personId = Envelopes.getCurrentPersonId(args.alias); 
-		var person = Envelopes.getCurrentPerson(args.alias);
-		var account = Envelopes.getCurrentAccount(args.source);
-		var currency = account != null ? account.currency : null;
-		var expr = args.object.text;
-		
-		if (person != null && account != null && currency != null && expr.length > 0) {
-			var data = {
-				expression: expr,
-				account: account.id,
-				currency: currency.id
-			};
-			displayMessage("Expense saved");
-		} else {
-			displayMessage("Not enough parameters");
-		}
+		Envelopes.submitDailyExpence(args);
 	}
 });
 
