@@ -317,7 +317,7 @@ Envelopes.sendAjaxRequest = function(async, pblock, resource, data, onSuccess, o
 		data: data,
 		beforeSend: function(xhr) {
 			Envelopes.setRequestHeaders(xhr, authInfo);
-			CmdUtils.log(this);
+			//CmdUtils.log(this);
 			return true;
 		},
 		success: function(data, textStatus) {
@@ -572,8 +572,8 @@ Envelopes.loadDailyExpences = function(pblock, args, loadUserInfo) {
 	}
 	var authInfo = Envelopes.getAuthInfo();
 	var acc = Envelopes.getCurrentAccount(args.source);
-	//var data = args.time.data;
-	var cbData = {args: args, 
+	var cbData = {
+		args: args, 
 		personId: Envelopes.getCurrentPersonId(args.alias), 
 		person: Envelopes.getCurrentPerson(args.alias),
 		account: acc,
@@ -586,7 +586,7 @@ Envelopes.loadDailyExpences = function(pblock, args, loadUserInfo) {
 		rawData: null
 	};
 
-	if (cbData.userInfo == null) {
+	if (cbData.userInfo == null && loadUserInfo) {
 		pblock.innerHTML = CmdUtils.renderTemplate(_("Loading user information..."));
 		Envelopes.sendAjaxRequest(true, pblock, Envelopes.API.USER_INFO, null, Envelopes.handleUserInfoForDailyExpence, null, 
 			true, cbData);
@@ -614,45 +614,74 @@ Envelopes.displayDailyExpences = function(pblock, data, textStatus, cbData) {
 	return;
 }
 
-Envelopes.submitDailyExpence = function(args) {
+Envelopes.prepareExpenceForSubmission = function(args) {
 	if ( !Envelopes.isAuthInfoAvailable(null) ) {
 		displayMessage(_('Error: You are not logged in'));
 		return;
 	}
+	
 	var authInfo = Envelopes.getAuthInfo();
 	//var personId = Envelopes.getCurrentPersonId(args.alias); 
 	var person = Envelopes.getCurrentPerson(args.alias);
 	var account = Envelopes.getCurrentAccount(args.source);
-	CmdUtils.log(account);
 	var currency = account != null ? account.currency : null;
-	CmdUtils.log(currency);
 	var date = args.time.text;
 	var expr = args.object.text;
 	
+	var cbData = {
+		args: args, 
+		person: person,
+		account: account,
+		currency: currency,
+		date: date,
+		expression: expr,
+		user: authInfo.name,
+		userInfo: Envelopes.getUserInfo(),
+		url: null
+	};
+
 	if (person != null && account != null && currency != null 
 			&& expr.length > 0 && date.length > 0) {
-		var data = {
-			expression: expr,
-			account: account.id,
-			currency: currency.id
-		};
-		var urlParams = {
-			personId: person.id, 
-			date: date, 
-			user: authInfo.name,
-		};
-		var url = CmdUtils.renderTemplate(Envelopes.API.DAILY_EXPENSE, urlParams);
-		CmdUtils.log('DE url: ' + url);
-		Envelopes.sendAjaxRequest(true, null, url, data, 
-			function(pblock, data, textStatus) {
-				displayMessage("Expense successfully saved!");
-			}, 
-			null
+		cbData.personId = person.id;
+		cbData.url = CmdUtils.renderTemplate(Envelopes.API.DAILY_EXPENSE, cbData);
+		Envelopes.sendAjaxRequest(true, null, cbData.url, null, 
+			Envelopes.submitDailyExpence, 
+			null,
+			true,
+			cbData
 		);
 		displayMessage("Saving expence...");
 	} else {
 		displayMessage("Not enough parameters");
 	}
+
+}
+
+
+Envelopes.submitDailyExpence = function(pblock, data, textStatus, cbData) {
+	var expr = '';
+	var de = Envelopes.parseDailyExpence(data);
+	for (e in de.expressions) {
+		if (de.expressions[e].account == cbData.account.id) {
+			expr = de.expressions[e].value + '\n';
+			break;
+		}
+	}
+	
+	expr += cbData.expression;
+	var data = {
+		expression: expr,
+		account: cbData.account.id,
+		currency: cbData.currency.id
+	};
+	
+	Envelopes.sendAjaxRequest(true, null, cbData.url, data, 
+		function(pblock, data, textStatus) {
+			displayMessage("Expense successfully saved!");
+		}, 
+		null,
+		false
+	);
 }
 
 noun_type_account = {
@@ -708,7 +737,7 @@ CmdUtils.CreateCommand({
 		//displayMessage("You selected: " + args.object.text, this);
 		Envelopes.setCurrentPersonId(args.alias);
 		Envelopes.setCurrentAccountId(args.source);
-		Envelopes.submitDailyExpence(args);
+		Envelopes.prepareExpenceForSubmission(args);
 	}
 });
 
