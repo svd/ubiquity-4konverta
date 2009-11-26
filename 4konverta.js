@@ -4,7 +4,9 @@
 
 // Ubiquity docs:
 // https://wiki.mozilla.org/Labs/Ubiquity
+// https://wiki.mozilla.org/Labs/Ubiquity/Ubiquity_Source_Tip_Author_Tutorial
 // https://wiki.mozilla.org/Labs/Ubiquity/Ubiquity_0.5_Author_Tutorial
+// https://wiki.mozilla.org/Labs/Ubiquity/Writing_Noun_Types
 // http://code.google.com/p/trimpath/wiki/JavaScriptTemplates
 
 Envelopes = {
